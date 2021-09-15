@@ -1,0 +1,252 @@
+ Some notes about Ansible :)
+ 
+ Automation Configuration Mangament System
+ 
+ REQUIREMENTS:
+ 
+ Master server:
+ 
+ >Linux only
+ >Python 2.6+ ,3.5+
+ 
+ Managed servers:
+ 
+ >Linux Username/Password/SSH, Python 2.6+
+ >Windows Username/Password, PowerShell 3.0+, /ConfigureRemoteAnsible.ps1
+ 
+ Protocols:
+ 
+ >Linux SSH/22
+ >Windows WINRM/5986
+ 
+ 
+ Ansible connect Linux:
+ 
+FAQ:
+Should copy keys from node to master, and from master to node(ssh keys)
+ 
+[servers]
+host1 ansible_host=ip_address ansible_user=username ansible_ssh_private_key_file=/path/to/rsa_id.pub
+
+[win_servers]
+host2 ansible_host=ip_address
+
+[win_servers:vars]
+ansible_user= TopPC
+ansible_password=
+ansible_port=5986
+ansible_connection= winrm
+ansible_winrm_server_cert_validation= ignore
+ 
+>ansible -i hosts.txt all -m ping (-i => inventory file(where is confige for machines), all(to all groups of machine [some_group]), -m ping(module ping), to windows add win_)
+
+RULES OF CREATING INVENTORY FILE:
+
+1.You could write just ip:
+
+172.16.0.1
+
+2.addresses without group => ungrouped addresses
+
+3.Creating group:
+
+[staging_server] => for staging machines
+[production_server] => for production machines
+
+4.Creating parent group for groups:
+
+[staging_DB]
+172.16.2.1
+172.16.2.2
+[staging_WEB]
+192.168.1.1
+192.168.1.2
+[staging_PY]
+
+[staging_ALL:children] => parent group for group below
+staging_DB
+staging_WEB
+staging_PY
+ 
+>ansible-inventory --list(to show all groups and addresses)
+
+===============================================================================================================================================================================================================================================================
+
+Ad-Hoc commands
+
+>ansible all -m setup(Shows a lot of information of current group of machines)
+>ansible all -m shell -a "ls"(execute ls on all servers)
+>ansible all -m file -a "path=/home/privet.txt state=absent" -b(module file, operates with files -b mean to become a supersu)
+>ansible all -m get_url -a "url=https://somelink.com dest=/home" -b(get file from internet)
+>ansible servers -m yum -a "name=lynis state=latest" -b --ask-become-pass(download app Lynis for linux --ask-become-pass => ask for password for supersu)
+>ansible servers -m uri -a "url=http://www.adv-it.net return_content=yes" -vvv(-vvv => verbose to debug)
+>ansible-doc(to check all commands in ansible)
+
+=======================================================================
+
+Variables managment
+
+Simple script with using module "msg"
+
+---
+- name: My variables lesson playbook
+  hosts: SERVERS
+  become: yes
+
+
+  vars:
+          name: Serg
+          age: 20
+          position: DevOps Engineer
+
+  tasks:
+          - name: Print position var
+            debug:
+                    var: position
+
+          - debug:
+                    msg: "Hi my position is: {{position}}"
+
+          - debug:
+                    msg: "My name is {{name}}"
+
+          - set_fact: name_and_position="{{name}} {{position}}"
+
+          - debug:
+                    msg: "Hi my name and position => {{name_and_position}}"
+          
+          - debug:
+                    var: ansible_distribution          
+          
+          - shell: uptime
+            register: result
+
+          - debug:
+                    msg: "Output of uptime: {{result}}"            
+                                  
+
+- debug => to debug
+msg: to show some message
+{{var}}: to use var in script
+- shell: to use script on shell
+register: to save out of shell(for example) to some variable
+                                                                
+
+=====================================================================
+
+
+
+YAML Format:
+
+--- (3 dashes start of every script)
+
+... (3 dots end of every script)
+
+- command1 
+
+- fruits:
+  	- apple
+  	- banana
+  	- orange
+  	- mango
+- vegetables:
+	- carrot
+	- potato
+	- tomato
+- vasya:
+	nick: vasyok
+	position: developer
+	skills:
+	- python
+	- php
+	- perl
+- kolya: { nick: kolyan, position: HR}
+
+=====================================================================
+
+Loops
+
+script example:
+
+- name: Playbook lesson about loops
+  hosts: SERVERS
+  become: yes
+
+  tasks:
+         - name: Say hello to SERVERS
+           debug:
+                   msg: "Hello {{ item }}"
+           loop:
+                - "Nastya"
+                - "Max"
+                - "Daniel"
+
+item - is reserved word, like item in foreach loop(JS,python etc.)
+loop: here you can add all items for your for each loop :)
+
+Output:
+>Hello Nasya
+>Hello Max 
+>Hello Daniel
+
+Until
+
+script example:
+
+- name: Loop until example
+           shell: echo -n "Z" >> text.txt && cat text.txt
+           register: output
+           delay: 2
+           retries: 10
+           until: output.stdout.find("ZZZZ") == false
+
+
+         - name: Print final Output
+           debug:
+                   var: output.stdout
+
+delay:2 - 2 seconds delay
+retries: 10 - 10 times execute this command
+until: until "zzzz"
+this script will execut until in file will not zzzz
+
+===================================================================
+
+Block-When
+
+when: to execute command/block when some condition is true
+block: you can group some commands in block
+
+- block:
+
+	- name: Echo "Hello World"
+	  debug:
+	  	msg: "Hello world"
+	  	
+  when: ansible_os_family == "Debian"	  	
+
+===================================================================
+
+Templates - Jinja Template
+
+You should create file with name.j2
+
+Then in {{some_car}} you coulde use your vars which you want to generate
+
+example:
+
+i am template from jinja template.
+My owner is : {{owner}}
+My hostname is : {{ansible_hostname}}
+My OS is : {{ansible_os_family}}
+
+
+Output on another machine:
+
+i am template from jinja template.
+My owner is : Serg
+My hostname is : salamslave-VirtualBox
+My OS is : Debian
+
+
+
